@@ -21,40 +21,50 @@ func SkipLine(r io.ByteReader) error {
 }
 
 // Assumes that even partial matches may not overlap. Stops at match or newline.
-func ScanUntil(r io.ByteReader, target string) (int, error) {
-	i, j := 0, 0
+func ScanUntil(r io.ByteReader, target string, ignorespace bool) (scanned string, pos int, err error) {
+	var i, j, k int
+	var b byte
+	buf := make([]byte, 0, len(target))
+	pos = -1
 	for {
-		b, err := r.ReadByte()
+		b, err = r.ReadByte()
 		if err != nil {
-			return -1, err
+			return
 		} else if b == '\n' {
-			return -1, nil
+			return
 		}
 		switch target[j] {
 		case b:
+			buf = append(buf, b)
 			j++
 		default:
-			j = 0
+			if j > 0 && (b == ' ' || b == '\t') {
+				buf = append(buf, b)
+				k++
+			} else {
+				j = 0
+			}
 		}
 		if j >= len(target) {
-			return i - j + 1, nil
+			scanned = string(buf)
+			pos = i - j - k + 1
+			return
 		}
 		i++
 	}
-	return -1, nil
+	return
 }
 
 // Assumes that even partial matches may not overlap. Stops at newline.
-func ScanLine(r io.ByteReader, target string) (int, error) {
-	i, err := ScanUntil(r, target)
-	if i >= 0 {
+func ScanLine(r io.ByteReader, target string, ignorespace bool) (scanned string, pos int, err error) {
+	scanned, pos, err = ScanUntil(r, target, ignorespace)
+	if pos >= 0 {
 		err = SkipLine(r)
-		return i, err
 	}
-	return -1, err
+	return
 }
 
-func Parse(path, name string) (desc string, err error) {
+func Parse(path, name string) (parsed_name, desc string, err error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return
@@ -62,7 +72,7 @@ func Parse(path, name string) (desc string, err error) {
 	defer file.Close()
 	r := bufio.NewReader(file)
 	var i int
-	switch i, err = ScanLine(r, "character file."); {
+	switch _, i, err = ScanLine(r, "character file.", false); {
 	case i < 0:
 		err = errors.New("Unrecognized morgue format")
 		fallthrough
@@ -70,10 +80,12 @@ func Parse(path, name string) (desc string, err error) {
 		return
 	}
 	for {
-		if i, err = ScanUntil(r, name); i == 0 {
-			if i, err = ScanUntil(r, "("); i >= 0 {
-				if s, err := r.ReadString(')'); err == nil {
-					return s[:len(s)-1], nil
+		if parsed_name, i, err = ScanUntil(r, name, true); i == 0 {
+			if _, i, err = ScanUntil(r, "(", false); i >= 0 {
+				var s string
+				if s, err = r.ReadString(')'); err == nil {
+					desc = s[:len(s)-1]
+					return
 				}
 			}
 		}

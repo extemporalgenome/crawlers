@@ -47,7 +47,7 @@ func main() {
 		if filter && !restrict[strings.ToLower(name)] {
 			continue
 		}
-		desc, err := Parse(filename, name)
+		name, desc, err := Parse(filename, name)
 		if err != nil {
 			continue
 		}
