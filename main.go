@@ -38,7 +38,8 @@ func main() {
 		filter = true
 		restrict = make(map[string]bool, len(args))
 		for _, name := range args {
-			restrict[strings.ToLower(name)] = true
+			name = strings.ToLower(strings.Join(strings.Fields(name), ""))
+			restrict[name] = true
 		}
 	}
 	groups := make(map[string][]string, len(filenames))
